@@ -3,8 +3,8 @@ $(function() {
 	/* Build new ShopifyBuy client
 	============================================================ */
 	var client = ShopifyBuy.buildClient({
-		apiKey: '248b922aeaee15d33c44aa3e657663f6', // Your SDK API/access token 
-		domain: 'stickers-15.myshopify.com', // Your complete Shopify store domain
+		apiKey: 'b44dbbd5a4addf67f6821df03035a88d', // Your SDK API/access token 
+		domain: 'play-padel.myshopify.com', // Your complete Shopify store domain
 		appId: '6'
 	});
 
