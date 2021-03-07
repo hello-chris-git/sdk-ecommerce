@@ -7,6 +7,7 @@ $(function() {
 		domain: 'stickers-15.myshopify.com', // Your complete Shopify store domain
 		appId: '6'
 	});
+
 	var product;
 	var cart;
 	var cartLineItemCount;
@@ -29,6 +30,7 @@ $(function() {
 			cartLineItemCount = 0;
 		});
 	}
+
 	var previousFocusItem;
 
 
@@ -91,7 +93,6 @@ $(function() {
 	});
 	
 	
-
 	
   	/* Bind Event Listeners
   	============================================================ */
@@ -168,9 +169,6 @@ $(function() {
 		$('body').on('click', '.product-modal-underlay, .product-modal-close', hideModal);
 	}
 	
-
-	------------
-
 	
 	/* Event Listener handles post messages from checkout page
 	============================================================ */
@@ -302,5 +300,250 @@ $(function() {
   
 
 	
+	
 	/*************************************************************/
 	
+	
+	
+	
+	/* Decrease quantity amount by 1
+	============================================================ */
+	function decrementQuantity(variantId) {
+		updateQuantity(function(quantity) {
+			return quantity - 1;
+		}, variantId);
+	}
+
+	/* Increase quantity amount by 1
+	============================================================ */
+	function incrementQuantity(variantId) {
+		updateQuantity(function(quantity) {
+			return quantity + 1;
+		}, variantId);
+	}
+
+	/* Update product variant quantity in cart
+	============================================================ */
+	function updateQuantity(fn, variantId) {
+		var quantity;
+		var cartLineItem = findCartItemByVariantId(variantId);
+		if (cartLineItem) {
+			quantity = fn(cartLineItem.quantity);
+			updateVariantInCart(cartLineItem, quantity);
+		}
+	}
+
+	/* Update product variant quantity in cart through input field
+	============================================================ */
+	function fieldQuantityHandler(evt) {
+		var variantId = parseInt($(this).closest('.cart-item').attr('data-variant-id'), 10);
+		var cartLineItem = findCartItemByVariantId(variantId);
+		var quantity = evt.target.value;
+		if (cartLineItem) {
+			updateVariantInCart(cartLineItem, quantity);
+		}
+	}
+
+	/* Debounce taken from _.js
+	============================================================ */
+	function debounce(func, wait, immediate) {
+		var timeout;
+		return function() {
+			var context = this, args = arguments;
+			var later = function() {
+				timeout = null;
+				if (!immediate) func.apply(context, args);
+			};
+			var callNow = immediate && !timeout;
+			clearTimeout(timeout);
+			timeout = setTimeout(later, wait);
+			if (callNow) func.apply(context, args);
+		}
+	}
+
+
+	
+	
+	/*************************************************************/
+
+
+
+	/* Hide Modal 
+	============================================================ */
+	function hideModal() {
+		$('.product-modal').hide();
+		$('.product-modal-underlay').remove();
+	}
+	
+	
+	/* Open Cart
+	============================================================ */
+	function openCart() {
+		$('.cart').addClass('js-active');
+		hideModal();
+	}
+
+	/* Close Cart
+	============================================================ */
+	function closeCart() {
+		$('.cart').removeClass('js-active');
+		$('.overlay').removeClass('js-active');
+	}
+
+	/* Find Cart Line Item By Variant Id
+	============================================================ */
+	function findCartItemByVariantId(variantId) {
+		return cart.lineItems.filter(function(item) {
+			return (item.variant_id == variantId);
+		})[0];
+	}
+
+  	/* Determine action for variant adding/updating/removing
+  	============================================================ */
+	function addOrUpdateVariant(cartLineItem, variantObject, quantity) {
+		openCart();
+		var variantObjectID = variantObject.id;
+		if (cartLineItem) {
+			updateVariantInCart(cartLineItem, quantity);
+		} else {
+			addVariantToCart(variantObject, quantity);
+		}
+		updateCartTabButton();
+	}
+
+  	/* Update details for item already in cart. Remove if necessary
+  	============================================================ */
+	function updateVariantInCart(cartLineItem, quantity) {
+		var variantId = cartLineItem.variant_id;
+		var cartLength = cart.lineItems.length;
+		cart.updateLineItem(cartLineItem.id, quantity).then(function(updatedCart) {
+			var $cartItem = $('.cart').find('.cart-item[data-variant-id="' + variantId + '"]');
+			
+			if (updatedCart.lineItems.length >= cartLength) {
+					$cartItem.find('.cart-item__quantity').val(cartLineItem.quantity);
+					$cartItem.find('.cart-item__price').text(formatAsMoney(cartLineItem.line_price));
+			} else {
+				$cartItem.addClass('js-hidden').bind('transitionend webkitTransitionEnd oTransitionEnd MSTransitionEnd', function() {
+				   $cartItem.remove();
+				});
+			}
+
+			updateCartTabButton();
+			updateTotalCartPricing();
+			
+			if (updatedCart.lineItems.length < 1) {
+				closeCart();
+			}
+		}).catch(function (errors) {
+			console.log('Fail');
+			console.error(errors);
+		});
+	}
+
+  	/* Add 'quantity' amount of product 'variant' to cart
+  	============================================================ */
+	function addVariantToCart(variantObject, quantity) {
+		openCart();
+		var lineItems = $('<div class = "lineItems"></div>');
+		cart.addVariants({ variant: variantObject, quantity: quantity }).then(function(cart) {
+			for (var i = 0; i < cart.lineItems.length; i++) {
+				lineItems.append(renderCartItem(cart.lineItems[i]));
+			}
+
+			var $cartItemContainer = $('.cart-item-container');
+			$cartItemContainer.empty();
+			$cartItemContainer.append(lineItems);
+		}).catch(function (errors) {
+			console.log('Fail');
+			console.error(errors);
+		});
+
+		updateTotalCartPricing();
+		updateCartTabButton();
+	}
+	
+	/* Update cart tab button
+	============================================================ */
+	function updateCartTabButton() {
+		if (cart.lineItems.length > 0) {
+			$('.btn--cart-tab .btn__counter').html(cart.lineItemCount);
+			$('.btn--cart-tab').addClass('js-active');
+		} else {
+			$('.btn--cart-tab').removeClass('js-active');
+			$('.cart').removeClass('js-active');
+		}
+	}
+
+  	/* Return required markup for single item rendering
+  	============================================================ */
+	function renderCartItem(lineItem) {
+		console.log(lineItem);
+		var lineItemEmptyTemplate = $('#CartItemTemplate').html();
+		var $lineItemTemplate = $(lineItemEmptyTemplate);
+		var itemImage = lineItem.image.src;
+		
+		$lineItemTemplate.attr('data-variant-id', lineItem.variant_id);
+		$lineItemTemplate.addClass('js-hidden');
+		$lineItemTemplate.find('.cart-item__img').css('background-image', 'url(' + itemImage + ')');
+		$lineItemTemplate.find('.cart-item__title').text(lineItem.title);
+		
+		if (lineItem.variant_title != 'Default Title') {
+			$lineItemTemplate.find('.cart-item__variant-title').text(lineItem.variant_title);
+		}
+
+		$lineItemTemplate.find('.cart-item__price').text(formatAsMoney(lineItem.line_price));
+		$lineItemTemplate.find('.cart-item__quantity').attr('value', lineItem.quantity);
+		$lineItemTemplate.find('.quantity-decrement').attr('data-variant-id', lineItem.variant_id);
+		$lineItemTemplate.find('.quantity-increment').attr('data-variant-id', lineItem.variant_id);
+		$lineItemTemplate.removeClass('js-hidden');
+
+		return $lineItemTemplate;
+	}
+
+ 	/* Render the line items currently in the cart
+  	============================================================ */
+	function renderCartItems() {
+		var $cartItemContainer = $('.cart-item-container');
+		$cartItemContainer.empty();
+		
+		var lineItemEmptyTemplate = $('#CartItemTemplate').html();
+		var $cartLineItems = cart.lineItems.map(function (lineItem, index) {
+			return renderCartItem(lineItem);
+		});
+		
+		$cartItemContainer.append($cartLineItems);
+
+		setTimeout(function() {
+			$cartItemContainer.find('.js-hidden').removeClass('js-hidden');
+		}, 0);
+		updateTotalCartPricing();
+	}
+
+	/* Update Total Cart Pricing
+	============================================================ */
+	function updateTotalCartPricing() {
+		$('.cart .pricing').text(formatAsMoney(cart.subtotal));
+	}
+
+	/* Format amount as currency
+	============================================================ */
+	function formatAsMoney(amount, currency, thousandSeparator, decimalSeparator, localeDecimalSeparator) {
+		currency = currency || '$';
+		thousandSeparator = thousandSeparator || ',';
+		decimalSeparator = decimalSeparator || '.';
+		localeDecimalSeparator = localeDecimalSeparator || '.';
+		var regex = new RegExp('(\\d)(?=(\\d{3})+\\.)', 'g');
+
+		return currency + parseFloat(amount, 10).toFixed(2)
+			.replace(localeDecimalSeparator, decimalSeparator)
+			.replace(regex, '$1' + thousandSeparator)
+		.toString();
+	}
+
+	/* Set previously focused item for escape handler
+	============================================================ */
+	function setPreviousFocusItem(item) {
+		previousFocusItem = item;
+	}
+
+});
